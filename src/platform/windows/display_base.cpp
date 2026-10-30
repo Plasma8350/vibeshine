@@ -485,6 +485,9 @@ namespace platf::dxgi {
     uint64_t arrival_frames = 0;
     uint64_t arrival_timeouts = 0;
     auto arrival_last_log = std::chrono::steady_clock::now();
+    // Present -> capture wait (DWM/WGC present time of the frame until we hold it), logged at info level
+    // in both modes, so grid capture and capture_on_arrival can be compared from the normal log.
+    logging::min_max_avg_periodic_logger<double> present_to_capture_logger(info, "Present to capture wait", "ms", 10s);
     if (config::video.capture_on_arrival) {
       BOOST_LOG(info) << "capture_on_arrival enabled: frames are captured as soon as they are presented (no fixed capture grid)";
     }
@@ -659,6 +662,12 @@ namespace platf::dxgi {
           // is updating the display, so no visible stutter should be introduced by the sleep.
           std::this_thread::sleep_for(10ms);
         }
+      }
+
+      if (status == capture_e::ok && img_out && img_out->frame_timestamp) {
+        present_to_capture_logger.collect_and_log(
+          std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - *img_out->frame_timestamp).count()
+        );
       }
 
       if (output_monitor && output_monitor->reinit_requested()) {
