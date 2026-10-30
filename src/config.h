@@ -250,6 +250,7 @@ namespace config {
 
     int max_bitrate;  // Maximum bitrate, sets ceiling in kbps for bitrate requested from client
     double minimum_fps_target;  ///< Lowest framerate that will be used when streaming. Range 0-1000, 0 = half of client's requested framerate.
+    bool capture_on_arrival;  ///< Capture each frame as soon as the source presents it instead of waiting for the next slot of the fixed client-rate grid (saves up to one frame interval of host-side wait). Keeps a minimum spacing of 0.8 frame intervals.
     bool wgc_pacing_smoothing;  ///< Smooth WGC delivered frame cadence under low-latency (Reflex) source caps by snapping the pacing-group re-anchor back onto the prior grid instead of the jittery arrival phase. Disable for byte-for-byte legacy pacing.
   };
 

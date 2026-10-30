@@ -968,6 +968,7 @@ namespace config {
 
     0,  // max_bitrate
     20,  // minimum_fps_target (0 = framerate)
+    false,  // capture_on_arrival
     true  // wgc_pacing_smoothing
   };
 
@@ -1836,6 +1837,7 @@ namespace config {
 
     string_f(vars, "capture", video.capture);
     bool_f(vars, "wgc_pacing_smoothing", video.wgc_pacing_smoothing);
+    bool_f(vars, "capture_on_arrival", video.capture_on_arrival);
     string_f(vars, "encoder", video.encoder);
     const auto configured_encoder = video.encoder;
     video.encoder = std::string(nvenc::canonical_encoder_name(video.encoder));
@@ -2688,6 +2690,7 @@ namespace config {
         "dd_wa_dummy_plug_hdr10",
         "max_bitrate",
         "minimum_fps_target",
+        "capture_on_arrival",
 
         // Codec / capture negotiation
         "fec_percentage",

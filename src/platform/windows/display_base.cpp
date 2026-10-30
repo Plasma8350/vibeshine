@@ -480,6 +480,15 @@ namespace platf::dxgi {
 
     sleep_overshoot_logger.reset();
 
+    // capture_on_arrival state
+    std::optional<std::chrono::steady_clock::time_point> last_arrival_capture;
+    uint64_t arrival_frames = 0;
+    uint64_t arrival_timeouts = 0;
+    auto arrival_last_log = std::chrono::steady_clock::now();
+    if (config::video.capture_on_arrival) {
+      BOOST_LOG(info) << "capture_on_arrival enabled: frames are captured as soon as they are presented (no fixed capture grid)";
+    }
+
     while (true) {
       if (output_monitor && output_monitor->reinit_requested()) {
         BOOST_LOG(debug) << "Capture restart: source=output-monitor phase=before-snapshot monitor_id=" << output_monitor->diagnostic_id();
@@ -504,8 +513,41 @@ namespace platf::dxgi {
       platf::capture_e status = capture_e::ok;
       std::shared_ptr<img_t> img_out;
 
+      // capture_on_arrival: no fixed grid. Wait (at most one interval + 2 ms) for the next presented
+      // frame and take it right away, but never sooner than 0.8 intervals after the previous capture,
+      // so a source that presents twice within one interval does not produce two encodes back to back.
+      const bool on_arrival = config::video.capture_on_arrival && client_frame_rate_adjusted.Numerator != 0;
+      if (on_arrival) {
+        const auto interval = std::chrono::nanoseconds(
+          (int64_t) 1000000000LL * client_frame_rate_adjusted.Denominator / client_frame_rate_adjusted.Numerator
+        );
+        if (last_arrival_capture) {
+          const auto earliest = *last_arrival_capture + interval * 8 / 10;
+          if (std::chrono::steady_clock::now() < earliest) {
+            sleep_until_capture_target(timer.get(), earliest);
+          }
+        }
+        status = snapshot(pull_free_image_cb, img_out, std::chrono::duration_cast<std::chrono::milliseconds>(interval) + 2ms, *cursor);
+        if (status == capture_e::ok && img_out) {
+          last_arrival_capture = std::chrono::steady_clock::now();
+          arrival_frames++;
+        } else if (status == capture_e::timeout) {
+          arrival_timeouts++;
+          // Nothing presented within one interval (static content): give the encoder thread the
+          // D3D11 device lock for a moment, see the comment on the 10 ms sleep below.
+          std::this_thread::sleep_for(2ms);
+        }
+        if (auto t = std::chrono::steady_clock::now(); t - arrival_last_log >= 10s) {
+          BOOST_LOG(info) << "capture_on_arrival: frames=" << arrival_frames << " timeouts=" << arrival_timeouts;
+          arrival_frames = 0;
+          arrival_timeouts = 0;
+          arrival_last_log = t;
+        }
+        frame_pacing_group_start = std::nullopt;
+      }
+
       // Try to continue frame pacing group, snapshot() is called with zero timeout after waiting for client frame interval
-      if (frame_pacing_group_start) {
+      if (!on_arrival && frame_pacing_group_start) {
         if (client_frame_rate_adjusted.Numerator == 0) {
           frame_pacing_group_start = std::nullopt;
           frame_pacing_group_frames = 0;
@@ -545,7 +587,7 @@ namespace platf::dxgi {
       }
 
       // Start new frame pacing group if necessary, snapshot() is called with non-zero timeout
-      if (status == capture_e::timeout || (status == capture_e::ok && !frame_pacing_group_start)) {
+      if (!on_arrival && (status == capture_e::timeout || (status == capture_e::ok && !frame_pacing_group_start))) {
         status = snapshot(pull_free_image_cb, img_out, 200ms, *cursor);
 
         if (status == capture_e::ok && img_out) {
