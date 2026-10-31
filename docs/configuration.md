@@ -5217,6 +5217,13 @@ Enables the Vulkan HDR layer used by the display stack when HDR Vulkan capture s
 
 Enables KDE Plasma Wayland HDR environment compatibility for games launched during a resolved HDR stream. This does not force HDR and does not override SDR stream outcomes.
 
+### capture_on_arrival
+
+Captures each frame as soon as the source presents it instead of waiting for the next slot of the fixed
+client-rate capture grid. This removes up to one frame interval of host-side wait (on average about half an
+interval). A minimum spacing of 0.8 frame intervals between captures is kept. Disabled by default; can be
+set per client.
+
 ### wgc_pacing_smoothing
 
 Enables WGC pacing smoothing so capture re-anchors to the pacing grid instead of raw frame-arrival timing.
