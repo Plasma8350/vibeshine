@@ -39,7 +39,7 @@ on:
       release_artifact_retention_days:
         required: false
         type: number
-        default: 1
+        default: 14
       symbol_product_name:
         required: true
         type: string
